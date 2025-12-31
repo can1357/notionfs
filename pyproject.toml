@@ -1,0 +1,70 @@
+[project]
+name = "notionfs"
+version = "0.1.0"
+description = "Local-first sync for Notion: work with pages as markdown files"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "NotionFS Contributors"}
+]
+keywords = ["notion", "markdown", "sync", "local-first", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "python-frontmatter>=1.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "trio>=0.25.0",
+    "notion-client>=2.0.0,<2.5.0",  # 2.5+ removed databases.query
+    "httpx>=0.25.0",
+    "mistune>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "aiosqlite>=0.19.0",
+    "tomli_w>=1.0.0",  # TOML writing (reading via stdlib tomllib in 3.11+)
+    "watchfiles>=0.21.0",  # Robust async file watching
+    "questionary>=2.0.0",  # Interactive prompts
+    "gitpython>=3.1.0",  # Git operations
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "pytest-trio", "ruff", "mypy", "types-PyYAML", "pytest-cov"]
+
+[project.scripts]
+notionfs = "notionfs.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/can1357/notionfs"
+Documentation = "https://github.com/can1357/notionfs#readme"
+Repository = "https://github.com/can1357/notionfs"
+Issues = "https://github.com/can1357/notionfs/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notionfs"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
