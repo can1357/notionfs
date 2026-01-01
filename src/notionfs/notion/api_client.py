@@ -528,11 +528,35 @@ class NotionAPIClient:
             self._client.pages.update, page_id=page_id, properties=properties
         )
 
+    async def _erase_page_content(self, page_id: str) -> None:
+        """Erase all block children from a page using raw HTTP request.
+
+        The notion-client SDK's pages.update() filters out erase_content,
+        so we bypass the SDK and make a direct PATCH request.
+        """
+        url = f"https://api.notion.com/v1/pages/{page_id}"
+        headers = {"Notion-Version": "2022-06-28"}
+        json_body = {"erase_content": True}
+
+        async with self._request_limiter:
+            await self._enforce_request_spacing()
+            self._emit_request("PATCH", f"/pages/{page_id}", status="pending")
+            try:
+                response = await self._client.client.patch(url, json=json_body, headers=headers)
+                response.raise_for_status()
+                self._emit_request("PATCH", f"/pages/{page_id}", status="success", status_code=200)
+            except httpx.HTTPStatusError as e:
+                self._emit_request(
+                    "PATCH", f"/pages/{page_id}", status="error",
+                    status_code=e.response.status_code, error=str(e)
+                )
+                raise
+
     async def update_blocks(self, page_id: str, blocks: list[dict[str, Any]]) -> None:
         """Replace page content by erasing existing children and appending new blocks.
 
-        Uses the erase_content flag for efficient bulk deletion instead of
-        deleting blocks individually. For diff-based updates, use update_blocks_diff().
+        Uses a direct HTTP request for erase_content since the notion-client SDK
+        filters out that parameter. For diff-based updates, use update_blocks_diff().
 
         Args:
            page_id: Notion page ID
@@ -540,11 +564,8 @@ class NotionAPIClient:
         """
         logger.debug("Updating blocks for page: %s", page_id)
 
-        # Erase all existing content in one API call (much more efficient than
-        # deleting each block individually). Note: this "cannot be reversed using the API"
-        await self._call_with_retry(
-            self._client.pages.update, page_id=page_id, erase_content=True
-        )
+        # Erase all existing content in one API call (bypassing SDK limitation)
+        await self._erase_page_content(page_id)
 
         # Append new blocks in chunks (Notion limits to 100 blocks per request)
         if blocks:

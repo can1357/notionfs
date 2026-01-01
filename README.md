@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="NotionFS">
+  <img src="https://raw.githubusercontent.com/can1357/notionfs/main/assets/banner.png" alt="NotionFS">
 </p>
 
 <p align="center">

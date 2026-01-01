@@ -982,6 +982,7 @@ def resolve(ctx: click.Context, path: str, resolution: str | None) -> None:
 
       elif resolution == "both":
          # Create .conflict copy of local, then pull remote
+         conflict_path: Path | None = None
          if abs_path.exists():
             conflict_path = abs_path.with_suffix(f".conflict{abs_path.suffix}")
             import shutil
@@ -994,7 +995,8 @@ def resolve(ctx: click.Context, path: str, resolution: str | None) -> None:
          await engine.pull(force=True)
 
          console.print(f"[green]✓[/green] Resolved: {rel_path}")
-         console.print(f"  Local saved as: {conflict_path.name}")
+         if conflict_path is not None:
+            console.print(f"  Local saved as: {conflict_path.name}")
 
       await state.close()
 
