@@ -1,6 +1,6 @@
 [project]
 name = "notionfs"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local-first sync for Notion: work with pages as markdown files"
 readme = "README.md"
 license = {text = "MIT"}
