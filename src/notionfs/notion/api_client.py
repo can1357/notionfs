@@ -372,7 +372,7 @@ class NotionAPIClient:
         page = await self._call_with_retry(self._client.pages.retrieve, page_id=page_id)
 
         # Fetch all content blocks
-        blocks = await self.get_block_children(page_id)
+        blocks = await self.get_block_children(page_id, recursive=True)
 
         return {"page": page, "blocks": blocks}
 
@@ -484,11 +484,16 @@ class NotionAPIClient:
         logger.debug("Queried database %s: %d rows", database_id, len(results))
         return results
 
-    async def get_block_children(self, block_id: str) -> list[dict[str, Any]]:
-        """List all child blocks with pagination.
+    async def get_block_children(
+        self,
+        block_id: str,
+        recursive: bool = False,
+    ) -> list[dict[str, Any]]:
+        """List child blocks with pagination, optionally hydrating nested children.
 
         Args:
            block_id: Parent block/page ID
+           recursive: When True, fetch nested children for blocks that contain them.
 
         Returns:
            List of all child block objects
@@ -512,6 +517,19 @@ class NotionAPIClient:
             cursor = response.get("next_cursor")
             if not response.get("has_more") or cursor is None:
                 break
+
+        if recursive:
+            for block in results:
+                if not block.get("has_children"):
+                    continue
+                child_type = block.get("type")
+                # child_page and child_database point to separate objects, not nested block content
+                if child_type in {"child_page", "child_database"}:
+                    continue
+                child_id = block.get("id")
+                if not child_id:
+                    continue
+                block["children"] = await self.get_block_children(child_id, recursive=True)
 
         logger.debug("Fetched %d blocks from %s", len(results), block_id)
         return results

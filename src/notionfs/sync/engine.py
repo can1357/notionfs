@@ -474,7 +474,7 @@ class SyncEngine:
 
          try:
             # Fetch blocks
-            entry_blocks = await self.api_client.get_block_children(entry_id)
+            entry_blocks = await self.api_client.get_block_children(entry_id, recursive=True)
 
             # Build RemotePage
             remote = RemotePage(
@@ -886,7 +886,7 @@ class SyncEngine:
 
          # Always fetch block children for tree traversal (needed to find child_page/child_database)
          # TODO: future optimization - cache tree structure to skip this for unchanged parents
-         blocks = await self.api_client.get_block_children(page_id)
+         blocks = await self.api_client.get_block_children(page_id, recursive=True)
 
          # Check for child pages/databases in blocks
          child_refs: list[tuple[str, str]] = []  # (id, type)
@@ -1002,7 +1002,7 @@ class SyncEngine:
          async def fetch_entry_blocks(idx: int, eid: str, title: str, url: str,
                                        edited: datetime | None, props: dict[str, Any]) -> None:
             try:
-               entry_blocks = await self.api_client.get_block_children(eid)
+               entry_blocks = await self.api_client.get_block_children(eid, recursive=True)
                children[idx] = RemotePage(
                   id=eid,
                   title=title,

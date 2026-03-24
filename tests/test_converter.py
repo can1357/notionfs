@@ -235,6 +235,41 @@ class TestBlocksToMarkdown:
         result = blocks_to_markdown(blocks)
         assert "![Caption](https://example.com/img.png)" in result
 
+    def test_table(self):
+        """Test table block conversion."""
+        blocks = [
+            {
+                "type": "table",
+                "table": {
+                    "table_width": 2,
+                    "has_column_header": True,
+                    "has_row_header": False,
+                },
+                "children": [
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"plain_text": "Name"}],
+                                [{"plain_text": "Role"}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"plain_text": "Ada"}],
+                                [{"plain_text": "Engineer"}],
+                            ]
+                        },
+                    },
+                ],
+            }
+        ]
+        result = blocks_to_markdown(blocks)
+        assert result == "| Name | Role |\n| --- | --- |\n| Ada | Engineer |"
+
     def test_unknown_block(self):
         """Test unknown block type."""
         blocks = [{"type": "unknown_type", "unknown_type": {}}]
@@ -320,6 +355,38 @@ class TestMarkdownToBlocks:
         blocks = markdown_to_blocks("![alt](https://example.com/img.png)")
         assert blocks[0]["type"] == "image"
         assert blocks[0]["image"]["external"]["url"] == "https://example.com/img.png"
+
+    def test_table(self):
+        """Test markdown table conversion."""
+        blocks = markdown_to_blocks("| Name | Role |\n| --- | --- |\n| Ada | Engineer |")
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "table"
+        assert blocks[0]["table"]["table_width"] == 2
+        assert blocks[0]["table"]["has_column_header"] is True
+        assert blocks[0]["table"]["has_row_header"] is False
+        assert len(blocks[0]["children"]) == 2
+
+        header_row = blocks[0]["children"][0]["table_row"]["cells"]
+        data_row = blocks[0]["children"][1]["table_row"]["cells"]
+
+        assert header_row[0][0]["text"]["content"] == "Name"
+        assert header_row[1][0]["text"]["content"] == "Role"
+        assert data_row[0][0]["text"]["content"] == "Ada"
+        assert data_row[1][0]["text"]["content"] == "Engineer"
+
+    def test_table_preserves_inline_formatting(self):
+        """Test inline formatting inside table cells."""
+        blocks = markdown_to_blocks(
+            "| Label | Value |\n| --- | --- |\n| **Bold** | [Link](https://example.com) |"
+        )
+
+        cells = blocks[0]["children"][1]["table_row"]["cells"]
+
+        assert cells[0][0]["annotations"]["bold"] is True
+        assert cells[0][0]["text"]["content"] == "Bold"
+        assert cells[1][0]["href"] == "https://example.com"
+        assert cells[1][0]["text"]["content"] == "Link"
 
     def test_empty_content(self):
         """Test empty content."""
@@ -437,6 +504,45 @@ class TestRoundtrip:
         blocks = markdown_to_blocks(md)
 
         assert blocks[0]["type"] == "bulleted_list_item"
+
+    def test_table_roundtrip(self):
+        """Test table roundtrip."""
+        original = [
+            {
+                "type": "table",
+                "table": {
+                    "table_width": 2,
+                    "has_column_header": True,
+                    "has_row_header": False,
+                },
+                "children": [
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"plain_text": "Language"}],
+                                [{"plain_text": "Creator"}],
+                            ]
+                        },
+                    },
+                    {
+                        "type": "table_row",
+                        "table_row": {
+                            "cells": [
+                                [{"plain_text": "Python"}],
+                                [{"plain_text": "Guido"}],
+                            ]
+                        },
+                    },
+                ],
+            }
+        ]
+        md = blocks_to_markdown(original)
+        blocks = markdown_to_blocks(md)
+
+        assert blocks[0]["type"] == "table"
+        assert blocks[0]["table"]["table_width"] == 2
+        assert blocks[0]["children"][1]["table_row"]["cells"][0][0]["text"]["content"] == "Python"
 
 
 class TestLinkResolver:

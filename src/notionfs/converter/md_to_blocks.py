@@ -259,6 +259,10 @@ class NotionBlockRenderer(mistune.HTMLRenderer):
     _QUOTE_MARKER = "\x00QUOTE\x00"
     # Sentinel to mark image was rendered (skip enclosing paragraph)
     _IMAGE_MARKER = "\x00IMAGE\x00"
+    # Sentinels for table parsing through Mistune's string renderer pipeline
+    _TABLE_ROW_SEP = "\x00TROW\x00"
+    _TABLE_CELL_SEP = "\x00TCELL\x00"
+    _TABLE_HEAD_MARK = "\x00THEAD\x00"
     # Pattern to match local .md links: [Title](./File.md)
     _LOCAL_LINK_PATTERN = re.compile(r"^\[([^\]]+)\]\(\./([^)]+\.md)\)$")
 
@@ -438,6 +442,69 @@ class NotionBlockRenderer(mistune.HTMLRenderer):
     def blank_line(self) -> str:
         return ""
 
+    def table(self, text: str) -> str:
+        rows: list[list[tuple[str, bool]]] = []
+
+        for row_text in text.split(self._TABLE_ROW_SEP):
+            if not row_text:
+                continue
+            row: list[tuple[str, bool]] = []
+            for cell in row_text.split(self._TABLE_CELL_SEP):
+                if not cell:
+                    continue
+                is_head = cell.startswith(self._TABLE_HEAD_MARK)
+                cell_text = cell[len(self._TABLE_HEAD_MARK):] if is_head else cell
+                row.append((cell_text, is_head))
+            if row:
+                rows.append(row)
+
+        if not rows:
+            return ""
+
+        table_width = max(len(row) for row in rows)
+        has_column_header = any(is_head for _, is_head in rows[0])
+
+        children: list[dict[str, Any]] = []
+        for row in rows:
+            cells = [md_to_rich_text(cell_text) for cell_text, _ in row]
+            while len(cells) < table_width:
+                cells.append([])
+            children.append(
+                {
+                    "type": "table_row",
+                    "table_row": {
+                        "cells": cells,
+                    },
+                }
+            )
+
+        self.blocks.append(
+            {
+                "type": "table",
+                "table": {
+                    "table_width": table_width,
+                    "has_column_header": has_column_header,
+                    "has_row_header": False,
+                },
+                "children": children,
+            }
+        )
+        return ""
+
+    def table_head(self, text: str) -> str:
+        return text
+
+    def table_body(self, text: str) -> str:
+        return text
+
+    def table_row(self, text: str) -> str:
+        return self._TABLE_ROW_SEP + text
+
+    def table_cell(self, text: str, align: str | None = None, head: bool = False) -> str:
+        del align
+        prefix = self._TABLE_HEAD_MARK if head else ""
+        return self._TABLE_CELL_SEP + prefix + text
+
     def finalize(self) -> builtins.list[dict[str, Any]]:
         """Finalize and return all collected blocks."""
         return self.blocks
@@ -469,7 +536,7 @@ def markdown_to_blocks(
     renderer = NotionBlockRenderer(link_resolver=link_resolver)
     md = mistune.create_markdown(
         renderer=renderer,
-        plugins=["strikethrough"],
+        plugins=["strikethrough", "table"],
     )
 
     md(content)
