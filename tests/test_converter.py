@@ -398,6 +398,115 @@ class TestProperties:
         assert result["Status"]["select"]["name"] == "Active"
 
 
+class TestTableConversion:
+    """Tests for table conversion in both directions."""
+
+    def _make_cell(self, text: str) -> list[dict]:
+        """Helper to create a Notion rich_text cell."""
+        return [{"type": "text", "text": {"content": text}, "plain_text": text}]
+
+    def _make_table_block(self, headers: list[str], rows: list[list[str]]) -> dict:
+        """Helper to create a Notion table block with children."""
+        children = []
+        children.append({
+            "type": "table_row",
+            "table_row": {"cells": [self._make_cell(h) for h in headers]},
+        })
+        for row in rows:
+            children.append({
+                "type": "table_row",
+                "table_row": {"cells": [self._make_cell(c) for c in row]},
+            })
+        return {
+            "type": "table",
+            "table": {
+                "table_width": len(headers),
+                "has_column_header": True,
+                "has_row_header": False,
+            },
+            "has_children": True,
+            "children": children,
+        }
+
+    # ── Pull direction: Notion blocks → markdown ──
+
+    def test_table_to_markdown(self):
+        """Test Notion table block converts to markdown table."""
+        block = self._make_table_block(
+            ["Name", "Cost"],
+            [["Cluster A", "$100"], ["Cluster B", "$50"]],
+        )
+        result = blocks_to_markdown([block])
+        assert "| Name | Cost |" in result
+        assert "| --- | --- |" in result
+        assert "| Cluster A | $100 |" in result
+        assert "| Cluster B | $50 |" in result
+
+    def test_table_to_markdown_empty_children(self):
+        """Test table with no children renders placeholder."""
+        block = {
+            "type": "table",
+            "table": {"table_width": 2},
+            "has_children": True,
+            "children": [],
+        }
+        result = blocks_to_markdown([block])
+        assert "notion:table" in result
+
+    # ── Push direction: markdown → Notion blocks ──
+
+    def test_markdown_table_to_blocks(self):
+        """Test markdown table converts to Notion table block."""
+        md = "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |"
+        blocks = markdown_to_blocks(md)
+
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "table"
+
+        table = blocks[0]["table"]
+        assert table["table_width"] == 2
+        assert table["has_column_header"] is True
+        assert len(table["children"]) == 3  # 1 header + 2 data rows
+
+    def test_markdown_table_cell_content(self):
+        """Test table cell content is correctly converted."""
+        md = "| Name | Cost |\n|---|---|\n| Cluster A | $100 |"
+        blocks = markdown_to_blocks(md)
+        table = blocks[0]["table"]
+        header_cells = table["children"][0]["table_row"]["cells"]
+        assert header_cells[0][0]["text"]["content"] == "Name"
+        assert header_cells[1][0]["text"]["content"] == "Cost"
+        data_cells = table["children"][1]["table_row"]["cells"]
+        assert data_cells[0][0]["text"]["content"] == "Cluster A"
+        assert data_cells[1][0]["text"]["content"] == "$100"
+
+    def test_markdown_table_with_formatting(self):
+        """Test table with inline formatting in cells."""
+        md = "| Service | Status |\n|---|---|\n| **bold** | `code` |"
+        blocks = markdown_to_blocks(md)
+        table = blocks[0]["table"]
+        data_row = table["children"][1]["table_row"]["cells"]
+        # Bold cell should have bold annotation
+        assert any(seg.get("annotations", {}).get("bold") for seg in data_row[0])
+        # Code cell should have code annotation
+        assert any(seg.get("annotations", {}).get("code") for seg in data_row[1])
+
+    def test_markdown_table_surrounded_by_content(self):
+        """Test table between paragraphs."""
+        md = "Before.\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\nAfter."
+        blocks = markdown_to_blocks(md)
+        types = [b["type"] for b in blocks]
+        assert types == ["paragraph", "table", "paragraph"]
+
+    def test_markdown_table_single_column(self):
+        """Test single-column table."""
+        md = "| Item |\n|---|\n| One |\n| Two |"
+        blocks = markdown_to_blocks(md)
+        table = blocks[0]["table"]
+        assert table["table_width"] == 1
+        assert len(table["children"]) == 3
+
+
 class TestRoundtrip:
     """Test roundtrip conversion (blocks -> markdown -> blocks)."""
 

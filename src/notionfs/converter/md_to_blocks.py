@@ -438,6 +438,85 @@ class NotionBlockRenderer(mistune.HTMLRenderer):
     def blank_line(self) -> str:
         return ""
 
+    # ── Table support ──────────────────────────────────────────────
+
+    def __init_table_state(self) -> None:
+        """Ensure table accumulator attributes exist."""
+        if not hasattr(self, "_table_rows"):
+            self._table_rows: list[list[list[dict[str, Any]]]] = []
+            self._current_row_cells: list[list[dict[str, Any]]] = []
+            self._table_has_header: bool = False
+
+    def table_cell(self, text: str, align: str | None = None, head: bool = False) -> str:
+        """Accumulate a single cell's rich_text content."""
+        self.__init_table_state()
+        rich = md_to_rich_text(text.strip()) if text.strip() else [_plain_text("")]
+        self._current_row_cells.append(rich)
+        if head:
+            self._table_has_header = True
+        return ""
+
+    def table_row(self, text: str) -> str:
+        """Flush accumulated cells as a completed row."""
+        self.__init_table_state()
+        self._table_rows.append(self._current_row_cells)
+        self._current_row_cells = []
+        return ""
+
+    def table_head(self, text: str) -> str:
+        """Flush header cells as the first row (mistune does not emit table_row for headers)."""
+        self.__init_table_state()
+        if self._current_row_cells:
+            self._table_rows.append(self._current_row_cells)
+            self._current_row_cells = []
+        return ""
+
+    def table_body(self, text: str) -> str:
+        return ""
+
+    def table(self, text: str) -> str:
+        """Build a Notion table block from accumulated rows and append it."""
+        self.__init_table_state()
+        rows = self._table_rows
+        if not rows:
+            self._table_rows = []
+            self._current_row_cells = []
+            self._table_has_header = False
+            return ""
+
+        col_count = max(len(r) for r in rows)
+        for row in rows:
+            while len(row) < col_count:
+                row.append([_plain_text("")])
+
+        children = []
+        for row in rows:
+            children.append(
+                {
+                    "type": "table_row",
+                    "table_row": {"cells": row},
+                }
+            )
+
+        self.blocks.append(
+            {
+                "type": "table",
+                "table": {
+                    "table_width": col_count,
+                    "has_column_header": self._table_has_header,
+                    "has_row_header": False,
+                    "children": children,
+                },
+            }
+        )
+
+        self._table_rows = []
+        self._current_row_cells = []
+        self._table_has_header = False
+        return ""
+
+    # ── End table support ─────────────────────────────────────────
+
     def finalize(self) -> builtins.list[dict[str, Any]]:
         """Finalize and return all collected blocks."""
         return self.blocks
@@ -469,7 +548,7 @@ def markdown_to_blocks(
     renderer = NotionBlockRenderer(link_resolver=link_resolver)
     md = mistune.create_markdown(
         renderer=renderer,
-        plugins=["strikethrough"],
+        plugins=["strikethrough", "table"],
     )
 
     md(content)
