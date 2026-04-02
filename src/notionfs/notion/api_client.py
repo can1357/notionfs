@@ -484,14 +484,27 @@ class NotionAPIClient:
         logger.debug("Queried database %s: %d rows", database_id, len(results))
         return results
 
-    async def get_block_children(self, block_id: str) -> list[dict[str, Any]]:
+    # Block types whose children are inline content (not separate pages/databases).
+    # These need recursive child fetching so the converter can render them.
+    _INLINE_CHILD_TYPES = frozenset({
+        "table", "toggle", "column_list", "column", "bulleted_list_item",
+        "numbered_list_item", "to_do", "quote", "callout", "synced_block",
+    })
+
+    async def get_block_children(
+        self, block_id: str, *, recursive: bool = True,
+    ) -> list[dict[str, Any]]:
         """List all child blocks with pagination.
 
         Args:
            block_id: Parent block/page ID
+           recursive: If True, recursively fetch children for inline-child
+              block types (table, toggle, column_list, etc.) so that the
+              converter has the full tree.  Child pages and databases are
+              NOT expanded (those are handled by the sync engine).
 
         Returns:
-           List of all child block objects
+           List of all child block objects (with inline children populated)
         """
         logger.debug("Fetching block children: %s", block_id)
         results: list[dict[str, Any]] = []
@@ -512,6 +525,20 @@ class NotionAPIClient:
             cursor = response.get("next_cursor")
             if not response.get("has_more") or cursor is None:
                 break
+
+        # Recursively fetch inline children (tables, toggles, columns, etc.)
+        if recursive:
+            for block in results:
+                block_type = block.get("type", "")
+                if (
+                    block.get("has_children")
+                    and block_type in self._INLINE_CHILD_TYPES
+                ):
+                    child_id = block.get("id")
+                    if child_id:
+                        block["children"] = await self.get_block_children(
+                            child_id, recursive=True,
+                        )
 
         logger.debug("Fetched %d blocks from %s", len(results), block_id)
         return results
