@@ -513,6 +513,14 @@ class NotionAPIClient:
             if not response.get("has_more") or cursor is None:
                 break
 
+        for block in results:
+            if (
+                block.get("has_children")
+                and block.get("type") not in {"child_page", "child_database"}
+                and (child_id := block.get("id"))
+            ):
+                block["children"] = await self.get_block_children(child_id)
+
         logger.debug("Fetched %d blocks from %s", len(results), block_id)
         return results
 
