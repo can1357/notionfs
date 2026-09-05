@@ -383,9 +383,10 @@ class SyncEngine:
       # Build mtime cache from existing state for incremental fetching
       all_entries = await self.state.list_entries()
       self._known_mtimes.clear()
-      for entry in all_entries:
-         if entry.remote_mtime:
-            self._known_mtimes[entry.notion_id] = entry.remote_mtime
+      if not force:
+         for entry in all_entries:
+            if entry.remote_mtime:
+               self._known_mtimes[entry.notion_id] = entry.remote_mtime
 
       # For databases, use streaming pull (fetch+write per entry)
       if is_database:
@@ -525,7 +526,7 @@ class SyncEngine:
                await self.state.set_entry(new_entry)
                async with result_lock:
                   result.created.append(rel_path)
-            elif remote.last_edited_time > (
+            elif force or remote.last_edited_time > (
                existing.remote_mtime or datetime.min.replace(tzinfo=timezone.utc)
             ):
                # Remote changed - check for conflict
@@ -1118,7 +1119,7 @@ class SyncEngine:
          result.created.append(rel_path)
          logger.debug("Created: %s", rel_path)
 
-      elif remote.last_edited_time > (
+      elif force or remote.last_edited_time > (
          entry.remote_mtime or datetime.min.replace(tzinfo=timezone.utc)
       ):
          # Remote changed since last sync
