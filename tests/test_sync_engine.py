@@ -423,7 +423,7 @@ class TestPull:
       sync_state: SyncState,
    ) -> None:
       """Pull with force=True overwrites local changes."""
-      old_time = datetime(2024, 1, 10, tzinfo=timezone.utc)
+      old_time = datetime(2024, 1, 15, 10, tzinfo=timezone.utc)
       old_hash = _compute_hash("Original")
       entry = SyncEntry(
          path="Test Page.md",
